@@ -1,0 +1,181 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Category;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+class AdminCategoryController extends Controller
+{
+    /**
+     * List all categories with optional filtering
+     */
+    public function index(Request $request)
+    {
+        $query = Category::with(['parent', 'children']);
+
+        // Filter by active status
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        // Filter by parent (root categories only)
+        if ($request->has('root_only') && $request->boolean('root_only')) {
+            $query->whereNull('parent_id');
+        }
+
+        // Filter by parent_id
+        if ($request->has('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        }
+
+        // Search by name
+        if ($request->has('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        $categories = $query->orderBy('name')->get();
+
+        return $this->success($categories, 'Categories retrieved successfully');
+    }
+
+    /**
+     * Show a specific category
+     */
+    public function show(Category $category)
+    {
+        $category->load(['parent', 'children', 'products']);
+
+        return $this->success($category, 'Category retrieved successfully');
+    }
+
+    /**
+     * Create a new category
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255', 'unique:categories,slug'],
+            'parent_id' => ['nullable', 'exists:categories,id'],
+            'is_active' => ['boolean'],
+        ], [
+            'name.required' => 'Category name is required.',
+            'slug.unique' => 'This slug is already taken.',
+            'parent_id.exists' => 'The selected parent category does not exist.',
+        ]);
+
+        // Generate slug from name if not provided
+        if (empty($validated['slug'])) {
+            $validated['slug'] = Str::slug($validated['name']);
+            
+            // Ensure uniqueness
+            $originalSlug = $validated['slug'];
+            $counter = 1;
+            while (Category::where('slug', $validated['slug'])->exists()) {
+                $validated['slug'] = $originalSlug . '-' . $counter;
+                $counter++;
+            }
+        }
+
+        // Set default is_active if not provided
+        if (!isset($validated['is_active'])) {
+            $validated['is_active'] = true;
+        }
+
+        $category = Category::create($validated);
+        $category->load(['parent', 'children']);
+
+        return $this->success($category, 'Category created successfully', 201);
+    }
+
+    /**
+     * Update a category
+     */
+    public function update(Request $request, Category $category)
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'slug' => ['sometimes', 'nullable', 'string', 'max:255', 'unique:categories,slug,' . $category->id],
+            'parent_id' => ['sometimes', 'nullable', 'exists:categories,id', function ($attribute, $value, $fail) use ($category) {
+                // Prevent category from being its own parent
+                if ($value == $category->id) {
+                    $fail('A category cannot be its own parent.');
+                }
+                // Prevent circular references (category cannot be parent of its own ancestor)
+                $ancestors = $this->getAncestors($category);
+                if (in_array($value, $ancestors)) {
+                    $fail('A category cannot be a parent of its own ancestor.');
+                }
+            }],
+            'is_active' => ['sometimes', 'boolean'],
+        ], [
+            'name.required' => 'Category name is required.',
+            'slug.unique' => 'This slug is already taken.',
+            'parent_id.exists' => 'The selected parent category does not exist.',
+        ]);
+
+        // Generate slug from name if name changed and slug not provided
+        if (isset($validated['name']) && !isset($validated['slug'])) {
+            $validated['slug'] = Str::slug($validated['name']);
+            
+            // Ensure uniqueness
+            $originalSlug = $validated['slug'];
+            $counter = 1;
+            while (Category::where('slug', $validated['slug'])->where('id', '!=', $category->id)->exists()) {
+                $validated['slug'] = $originalSlug . '-' . $counter;
+                $counter++;
+            }
+        }
+
+        $category->update($validated);
+        $category->load(['parent', 'children']);
+
+        return $this->success($category, 'Category updated successfully');
+    }
+
+    /**
+     * Delete a category
+     */
+    public function destroy(Category $category)
+    {
+        // Check if category has products
+        if ($category->products()->count() > 0) {
+            return $this->error(
+                'Cannot delete category that has products. Please reassign or delete products first.',
+                'CATEGORY_HAS_PRODUCTS',
+                400
+            );
+        }
+
+        // Check if category has children
+        if ($category->children()->count() > 0) {
+            return $this->error(
+                'Cannot delete category that has subcategories. Please delete or reassign subcategories first.',
+                'CATEGORY_HAS_CHILDREN',
+                400
+            );
+        }
+
+        $category->delete();
+
+        return $this->success(null, 'Category deleted successfully');
+    }
+
+    /**
+     * Get all ancestors of a category (for circular reference prevention)
+     */
+    private function getAncestors(Category $category, array $ancestors = []): array
+    {
+        if ($category->parent_id) {
+            $parent = Category::find($category->parent_id);
+            if ($parent) {
+                $ancestors[] = $parent->id;
+                return $this->getAncestors($parent, $ancestors);
+            }
+        }
+        return $ancestors;
+    }
+}
