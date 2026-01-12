@@ -111,6 +111,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])
 
         // Users
         Route::get('/users', [AdminUserController::class, 'index']);
+        Route::post('/users', [AdminUserController::class, 'store']); // Create customer
         Route::get('/users/{user}', [AdminUserController::class, 'show']);
         Route::post('/users/{user}/approve', [AdminUserController::class, 'approve']);
         Route::post('/users/{user}/reject', [AdminUserController::class, 'reject']);
@@ -121,9 +122,12 @@ Route::middleware(['auth:sanctum', 'role:admin'])
         Route::post('/vendors/{vendor}/approve', [AdminVendorController::class, 'approve']);
         Route::post('/vendors/{vendor}/reject', [AdminVendorController::class, 'reject']);
 
-        // Products (read-only)
+        // Products (full CRUD)
         Route::get('/products', [AdminProductController::class, 'index']);
+        Route::post('/products', [AdminProductController::class, 'store']);
         Route::get('/products/{product}', [AdminProductController::class, 'show']);
+        Route::put('/products/{product}', [AdminProductController::class, 'update']);
+        Route::delete('/products/{product}', [AdminProductController::class, 'destroy']);
 
         // Orders (read-only)
         Route::get('/orders', [AdminOrderController::class, 'index']);

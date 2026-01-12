@@ -134,4 +134,62 @@ class AdminUserController extends Controller
 
         return $this->success($user, 'User rejected successfully');
     }
+
+    /**
+     * Create a new customer (admin only)
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+                'password' => ['required', 'string', 'min:8'],
+                'approval_status' => ['nullable', 'string', 'in:pending,approved'],
+            ], [
+                'name.required' => 'Customer name is required.',
+                'name.max' => 'Customer name cannot exceed 255 characters.',
+                'email.required' => 'Email address is required.',
+                'email.email' => 'Please provide a valid email address.',
+                'email.unique' => 'This email address is already registered. Please use a different email.',
+                'password.required' => 'Password is required.',
+                'password.min' => 'Password must be at least 8 characters long.',
+                'approval_status.in' => 'Approval status must be either pending or approved.',
+            ]);
+
+            // Get the customer role
+            $role = \App\Models\Role::where('name', 'customer')->first();
+            
+            if (!$role) {
+                return $this->error(
+                    'Customer role not found. Please contact system administrator.',
+                    'ROLE_NOT_FOUND',
+                    500
+                );
+            }
+
+            // Create user with customer role
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
+                'role_id' => $role->id,
+                'approval_status' => $validated['approval_status'] ?? 'approved',
+                'approved_at' => $validated['approval_status'] === 'approved' ? now() : null,
+                'approved_by' => $validated['approval_status'] === 'approved' ? $request->user()->id : null,
+            ]);
+
+            $user->load(['role']);
+
+            return $this->success($user, 'Customer created successfully', 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->validationError($e->errors(), 'Validation failed. Please check your input.');
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to create customer. Please try again.',
+                'CUSTOMER_CREATION_ERROR',
+                500
+            );
+        }
+    }
 }
