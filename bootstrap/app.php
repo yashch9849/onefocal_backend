@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Auth\AuthenticationException;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\VendorScopeMiddleware;
+use App\Http\Middleware\CorsMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
 ->withRouting(
@@ -17,6 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
 
 ->withMiddleware(function (Middleware $middleware): void {
+
+    // Add CORS middleware first to handle all requests
+    $middleware->prepend(CorsMiddleware::class);
 
     $middleware->api();
 
