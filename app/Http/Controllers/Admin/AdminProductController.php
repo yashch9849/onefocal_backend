@@ -105,7 +105,7 @@ class AdminProductController extends Controller
                 'description' => 'nullable|string',
                 'price' => 'required|numeric|min:0',
                 'category_id' => 'required|exists:categories,id',
-                'vendor_id' => 'required|exists:vendors,id',
+                'vendor_id' => 'nullable|exists:vendors,id',
                 'moq' => 'required|integer|min:1',
                 'status' => 'nullable|string|in:active,inactive',
             ], [
@@ -116,7 +116,6 @@ class AdminProductController extends Controller
                 'price.min' => 'Product price must be at least 0.',
                 'category_id.required' => 'Category is required.',
                 'category_id.exists' => 'Selected category does not exist.',
-                'vendor_id.required' => 'Vendor is required.',
                 'vendor_id.exists' => 'Selected vendor does not exist.',
                 'moq.required' => 'Minimum order quantity (MOQ) is required.',
                 'moq.integer' => 'MOQ must be a whole number.',
@@ -142,22 +141,24 @@ class AdminProductController extends Controller
                 );
             }
 
-            // Verify vendor exists and is approved
-            $vendor = \App\Models\Vendor::find($data['vendor_id']);
-            if (!$vendor) {
-                return $this->error(
-                    'Selected vendor does not exist.',
-                    'VENDOR_NOT_FOUND',
-                    404
-                );
-            }
+            // Verify vendor exists and is approved (if vendor_id is provided)
+            if (isset($data['vendor_id']) && $data['vendor_id']) {
+                $vendor = \App\Models\Vendor::find($data['vendor_id']);
+                if (!$vendor) {
+                    return $this->error(
+                        'Selected vendor does not exist.',
+                        'VENDOR_NOT_FOUND',
+                        404
+                    );
+                }
 
-            if ($vendor->status !== 'approved') {
-                return $this->error(
-                    'Products can only be created for approved vendors. Please approve the vendor first.',
-                    'VENDOR_NOT_APPROVED',
-                    400
-                );
+                if ($vendor->status !== 'approved') {
+                    return $this->error(
+                        'Products can only be created for approved vendors. Please approve the vendor first.',
+                        'VENDOR_NOT_APPROVED',
+                        400
+                    );
+                }
             }
 
             $product = Product::create([
@@ -192,7 +193,7 @@ class AdminProductController extends Controller
                 'description' => 'nullable|string',
                 'price' => 'sometimes|required|numeric|min:0',
                 'category_id' => 'sometimes|required|exists:categories,id',
-                'vendor_id' => 'sometimes|required|exists:vendors,id',
+                'vendor_id' => 'nullable|exists:vendors,id',
                 'moq' => 'sometimes|required|integer|min:1',
                 'status' => 'nullable|string|in:active,inactive',
             ], [
@@ -203,7 +204,6 @@ class AdminProductController extends Controller
                 'price.min' => 'Product price must be at least 0.',
                 'category_id.required' => 'Category is required.',
                 'category_id.exists' => 'Selected category does not exist.',
-                'vendor_id.required' => 'Vendor is required.',
                 'vendor_id.exists' => 'Selected vendor does not exist.',
                 'moq.required' => 'Minimum order quantity (MOQ) is required.',
                 'moq.integer' => 'MOQ must be a whole number.',
@@ -231,8 +231,8 @@ class AdminProductController extends Controller
                 }
             }
 
-            // Verify vendor if vendor_id is being updated
-            if (isset($data['vendor_id'])) {
+            // Verify vendor if vendor_id is being updated (and not null)
+            if (isset($data['vendor_id']) && $data['vendor_id']) {
                 $vendor = \App\Models\Vendor::find($data['vendor_id']);
                 if (!$vendor) {
                     return $this->error(
@@ -249,6 +249,9 @@ class AdminProductController extends Controller
                         400
                     );
                 }
+            } elseif (isset($data['vendor_id']) && $data['vendor_id'] === null) {
+                // Allow setting vendor_id to null for admin products
+                $data['vendor_id'] = null;
             }
 
             $product->update($data);
