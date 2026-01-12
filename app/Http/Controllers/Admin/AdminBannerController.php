@@ -16,7 +16,7 @@ class AdminBannerController extends Controller
     {
         try {
             $request->validate([
-                'is_active' => 'nullable|boolean',
+                'is_active' => 'nullable',
                 'per_page' => 'nullable|integer|min:1|max:100',
             ], [
                 'per_page.integer' => 'Per page must be a number.',
@@ -26,9 +26,12 @@ class AdminBannerController extends Controller
 
             $query = Banner::query();
 
-            // Filter by active status
+            // Filter by active status - handle boolean values properly
             if ($request->has('is_active')) {
-                $query->where('is_active', $request->boolean('is_active'));
+                $isActive = filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($isActive !== null) {
+                    $query->where('is_active', $isActive);
+                }
             }
 
             $banners = $query->orderBy('position')
@@ -60,7 +63,7 @@ class AdminBannerController extends Controller
                 'link_type' => 'required|in:category,product,external',
                 'link_id' => 'nullable|integer',
                 'position' => 'nullable|integer|min:0',
-                'is_active' => 'nullable|boolean',
+                'is_active' => 'nullable',
                 'start_at' => 'nullable|date',
                 'end_at' => 'nullable|date|after:start_at',
             ], [
@@ -108,7 +111,7 @@ class AdminBannerController extends Controller
                 'link_type' => $request->link_type,
                 'link_id' => $request->link_id,
                 'position' => $position,
-                'is_active' => $request->boolean('is_active', true),
+                'is_active' => $this->convertToBoolean($request->input('is_active', true)),
                 'start_at' => $request->start_at,
                 'end_at' => $request->end_at,
             ]);
@@ -151,5 +154,19 @@ class AdminBannerController extends Controller
                 500
             );
         }
+    }
+
+    /**
+     * Convert value to boolean properly handling false values
+     */
+    private function convertToBoolean($value)
+    {
+        if ($value === false || $value === 'false' || $value === '0' || $value === 0) {
+            return false;
+        }
+        if ($value === true || $value === 'true' || $value === '1' || $value === 1) {
+            return true;
+        }
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
     }
 }

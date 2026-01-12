@@ -16,8 +16,8 @@ class AdminCategoryController extends Controller
     {
         try {
             $request->validate([
-                'is_active' => 'nullable|boolean',
-                'root_only' => 'nullable|boolean',
+                'is_active' => 'nullable',
+                'root_only' => 'nullable',
                 'parent_id' => 'nullable|integer|exists:categories,id',
                 'search' => 'nullable|string|max:255',
             ], [
@@ -27,14 +27,20 @@ class AdminCategoryController extends Controller
 
             $query = Category::with(['parent', 'children']);
 
-            // Filter by active status
+            // Filter by active status - handle boolean values properly
             if ($request->has('is_active')) {
-                $query->where('is_active', $request->boolean('is_active'));
+                $isActive = filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($isActive !== null) {
+                    $query->where('is_active', $isActive);
+                }
             }
 
-            // Filter by parent (root categories only)
-            if ($request->has('root_only') && $request->boolean('root_only')) {
-                $query->whereNull('parent_id');
+            // Filter by parent (root categories only) - handle boolean values properly
+            if ($request->has('root_only')) {
+                $rootOnly = filter_var($request->input('root_only'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($rootOnly === true) {
+                    $query->whereNull('parent_id');
+                }
             }
 
             // Filter by parent_id
@@ -89,13 +95,26 @@ class AdminCategoryController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'slug' => ['nullable', 'string', 'max:255', 'unique:categories,slug'],
                 'parent_id' => ['nullable', 'exists:categories,id'],
-                'is_active' => ['boolean'],
+                'is_active' => ['nullable'],
             ], [
                 'name.required' => 'Category name is required.',
                 'name.max' => 'Category name cannot exceed 255 characters.',
                 'slug.unique' => 'This slug is already taken. Please use a different slug.',
                 'parent_id.exists' => 'The selected parent category does not exist.',
             ]);
+
+            // Convert is_active to boolean properly - handle false values correctly
+            if (array_key_exists('is_active', $validated)) {
+                $isActiveValue = $validated['is_active'];
+                // Handle various formats: true, false, "true", "false", "1", "0", 1, 0
+                if ($isActiveValue === false || $isActiveValue === 'false' || $isActiveValue === '0' || $isActiveValue === 0) {
+                    $validated['is_active'] = false;
+                } elseif ($isActiveValue === true || $isActiveValue === 'true' || $isActiveValue === '1' || $isActiveValue === 1) {
+                    $validated['is_active'] = true;
+                } else {
+                    $validated['is_active'] = filter_var($isActiveValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+                }
+            }
 
             // Validate parent category if provided
             if (isset($validated['parent_id'])) {
@@ -162,13 +181,26 @@ class AdminCategoryController extends Controller
                         $fail('A category cannot be a parent of its own ancestor.');
                     }
                 }],
-                'is_active' => ['sometimes', 'boolean'],
+                'is_active' => ['sometimes', 'nullable'],
             ], [
                 'name.required' => 'Category name is required.',
                 'name.max' => 'Category name cannot exceed 255 characters.',
                 'slug.unique' => 'This slug is already taken. Please use a different slug.',
                 'parent_id.exists' => 'The selected parent category does not exist.',
             ]);
+
+            // Convert is_active to boolean properly if provided - handle false values correctly
+            if (array_key_exists('is_active', $validated)) {
+                $isActiveValue = $validated['is_active'];
+                // Handle various formats: true, false, "true", "false", "1", "0", 1, 0
+                if ($isActiveValue === false || $isActiveValue === 'false' || $isActiveValue === '0' || $isActiveValue === 0) {
+                    $validated['is_active'] = false;
+                } elseif ($isActiveValue === true || $isActiveValue === 'true' || $isActiveValue === '1' || $isActiveValue === 1) {
+                    $validated['is_active'] = true;
+                } else {
+                    $validated['is_active'] = filter_var($isActiveValue, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+                }
+            }
 
             // Generate slug from name if name changed and slug not provided
             if (isset($validated['name']) && !isset($validated['slug'])) {
