@@ -15,23 +15,23 @@ class CorsMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Get the origin from the request
+        $origin = $request->headers->get('Origin');
+        
         // Handle preflight OPTIONS request
         if ($request->getMethod() === 'OPTIONS') {
-            return response('', 200)
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, X-CSRF-TOKEN')
-                ->header('Access-Control-Max-Age', '86400');
+            $response = response('', 200);
+        } else {
+            $response = $next($request);
         }
-
-        $response = $next($request);
 
         // Add CORS headers to the response
         return $response
-            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Origin', $origin ?: '*')
             ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
             ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, X-CSRF-TOKEN')
             ->header('Access-Control-Expose-Headers', 'Content-Length, X-JSON')
+            ->header('Access-Control-Allow-Credentials', 'false')
             ->header('Access-Control-Max-Age', '86400');
     }
 }
