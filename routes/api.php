@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\AdminFeaturedProductController;
 use App\Http\Controllers\Admin\AdminCategoryController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\ImageUploadController;
 
 Route::get('/ping', function () {
     return response()->json(['status' => 'ok']);
@@ -145,3 +146,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])
         Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
         Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
     });
+
+Route::middleware('auth:sanctum')->post(
+    '/upload-image',
+    [ImageUploadController::class, 'upload']
+);
