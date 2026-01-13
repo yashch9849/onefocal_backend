@@ -100,6 +100,11 @@ class AdminProductController extends Controller
     public function store(Request $request)
     {
         try {
+            // Convert vendor_id 0 to null before validation
+            if ($request->has('vendor_id') && $request->vendor_id == 0) {
+                $request->merge(['vendor_id' => null]);
+            }
+            
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
@@ -142,7 +147,12 @@ class AdminProductController extends Controller
             }
 
             // Verify vendor exists and is approved (if vendor_id is provided)
-            if (isset($data['vendor_id']) && $data['vendor_id']) {
+            // Convert 0 to null for admin products
+            if (isset($data['vendor_id']) && $data['vendor_id'] == 0) {
+                $data['vendor_id'] = null;
+            }
+            
+            if (isset($data['vendor_id']) && $data['vendor_id'] !== null) {
                 $vendor = \App\Models\Vendor::find($data['vendor_id']);
                 if (!$vendor) {
                     return $this->error(
@@ -174,8 +184,15 @@ class AdminProductController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->validationError($e->errors(), 'Validation failed. Please check your input.');
         } catch (\Exception $e) {
+            // Log the actual error for debugging
+            \Log::error('Product creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $request->all(),
+            ]);
+            
             return $this->error(
-                'Failed to create product. Please try again.',
+                'Failed to create product: ' . $e->getMessage(),
                 'PRODUCT_CREATION_ERROR',
                 500
             );
